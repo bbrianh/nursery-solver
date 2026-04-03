@@ -1,63 +1,100 @@
-"""Execute planned grid moves as mouse drags in screen coordinates."""
-
-from __future__ import annotations
-
-import time
-from typing import Optional, Sequence, Tuple
-
 import pyautogui
-
-from models import GridGeometry, Move
+import time
 
 
 class MoveExecutor:
-    """Maps each ``Move`` to a drag from top-left to bottom-right of the rectangle."""
-
-    def __init__(
-        self,
-        geometry: GridGeometry,
-        screen_origin: Tuple[float, float],
-        *,
-        scale_xy: Tuple[float, float] = (1.0, 1.0),
-        letterbox: Optional[Tuple[float, float, float]] = None,
-        drag_duration: float = 0.15,
-        pause_between_moves: float = 0.08,
-        failsafe: bool = True,
-    ) -> None:
+    def __init__(self, geometry, anchor, scale_xy):
         """
-        :param geometry: Calibration in **canvas** pixel space (same as ``sqinfo``).
-        :param screen_origin: Window top-left ``(left, top)`` in screen coordinates.
-        :param scale_xy: Used when ``letterbox`` is ``None``: map canvas x/y by these
-            factors then add origin (independent x/y; can squash if aspect ratios differ).
-        :param letterbox: If set, ``(pad_x, pad_y, uniform_scale)`` from
-            :func:`capture.letterbox_to_internal` — maps canvas coords to screenshot
-            pixels without distortion.
+        geometry: GridGeometry (in INTERNAL coordinate space)
+        anchor: (x, y) top-left of capture on screen
+        scale_xy: (sx, sy) from INTERNAL → actual pixels
         """
-        self.geometry = geometry
-        self._ox, self._oy = screen_origin
-        self._sx, self._sy = scale_xy
-        self._letterbox = letterbox
-        self.drag_duration = drag_duration
-        self.pause_between_moves = pause_between_moves
-        pyautogui.FAILSAFE = failsafe
+        self.g = geometry
+        self.anchor = anchor
+        self.sx, self.sy = scale_xy
 
-    def _to_screen(self, xy: Tuple[float, float]) -> Tuple[int, int]:
-        x, y = xy
-        if self._letterbox is not None:
-            pad_x, pad_y, scale = self._letterbox
-            ox = (x - pad_x) / scale
-            oy = (y - pad_y) / scale
-            return int(self._ox + round(ox)), int(self._oy + round(oy))
-        sx = self._ox + round(x * self._sx)
-        sy = self._oy + round(y * self._sy)
-        return int(sx), int(sy)
+        self.terminate = False
+        self.last_mouse_position = None
 
-    def execute_moves(self, moves: Sequence[Move]) -> None:
-        """Perform each move as a left-button drag, in order."""
-        for move in moves:
-            start, end = self.geometry.move_drag_endpoints(move)
-            sx, sy = self._to_screen(start)
-            ex, ey = self._to_screen(end)
-            pyautogui.moveTo(sx, sy, duration=0.05)
-            pyautogui.dragTo(ex, ey, duration=self.drag_duration, button="left")
-            time.sleep(self.pause_between_moves)
+    # -------------------------
+    # Coordinate conversion
+    # -------------------------
+    def _to_screen(self, x, y):
+        sx = self.anchor[0] + x * self.sx
+        sy = self.anchor[1] + y * self.sy
+        return int(round(sx)), int(round(sy))
+
+    def cell_center(self, r, c):
+        """
+        Center of (r, c) in INTERNAL space → screen
+        """
+        x = self.g.anchor_x + c * self.g.h + self.g.hwidth / 2
+        y = self.g.anchor_y + r * self.g.v + self.g.vwidth / 2
+        return self._to_screen(x, y)
+
+    # -------------------------
+    # Interrupt (move mouse to stop)
+    # -------------------------
+    def _check_interrupt(self):
+        if self.terminate:
+            return True
+
+        current = pyautogui.position()
+
+        if self.last_mouse_position is None:
+            self.last_mouse_position = current
+            return False
+
+        dx = abs(current[0] - self.last_mouse_position[0])
+        dy = abs(current[1] - self.last_mouse_position[1])
+
+        if dx > 5 or dy > 5:
+            print("User interrupted execution")
+            self.terminate = True
+            return True
+
+        return False
+
+    # -------------------------
+    # Execute one move
+    # -------------------------
+    def execute_move(self, move, duration=0.12):
+        """
+        Move is EXCLUSIVE: [r1:r2, c1:c2]
+        """
+        if self._check_interrupt():
+            return
+
+        r1, c1, r2, c2 = move.r1, move.c1, move.r2, move.c2
+
+        # exclusive bounds → bottom-right is (r2-1, c2-1)
+        p1 = self.cell_center(r1, c1)
+        p2 = self.cell_center(r2 - 1, c2 - 1)
+
+        pyautogui.moveTo(*p1, duration=0.08)
+        self.last_mouse_position = pyautogui.position()
+
+        if self._check_interrupt(): return
+        pyautogui.mouseDown()
+        time.sleep(0.03)
+
+        pyautogui.moveTo(*p2, duration=duration)
+        self.last_mouse_position = pyautogui.position()
+
+        if self._check_interrupt(): return
+        time.sleep(0.03)
+        pyautogui.mouseUp()
+
+    # -------------------------
+    # Execute all moves
+    # -------------------------
+    def execute(self, moves):
+        self.terminate = False
+        self.last_mouse_position = pyautogui.position()
+
+        for i, move in enumerate(moves):
+            if self.terminate:
+                print(f"Stopped at move {i}")
+                break
+
+            self.execute_move(move)

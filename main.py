@@ -12,8 +12,8 @@ from capture import INTERNAL_HEIGHT, INTERNAL_WIDTH, capture_game_window
 from executor import MoveExecutor
 from models import GridGeometry
 from recognizer import Recognizer
-from solvers.noop import NoOpSolver
 from solvers import __all__ as solver_names
+from solvers import SOLVERS
 
 
 def parse_args() -> argparse.Namespace:
@@ -96,8 +96,10 @@ def main() -> None:
     if args.debug:
         _save_debug_matrix(grid)
 
-    solver = NoOpSolver()
-    moves = solver.plan(grid)
+    print("Solving grid...")
+    solver = SOLVERS[args.solver](grid, args.debug)
+    solver.plan()
+    moves = solver.get_solution()
     print(f"Planned {len(moves)} move(s).")
 
     if args.dry_run:
@@ -108,27 +110,17 @@ def main() -> None:
         print("Missing sqinfo after recognition; cannot execute.")
         return
 
+    print("Executing moves...")
     geometry = GridGeometry.from_sqinfo(recognizer.sqinfo)
-    if cap.stretch:
-        executor = MoveExecutor(
-            geometry,
-            cap.anchor,
-            scale_xy=(
-                cap.owidth / float(cap.internal_width),
-                cap.oheight / float(cap.internal_height),
-            ),
-        )
-    else:
-        executor = MoveExecutor(
-            geometry,
-            cap.anchor,
-            letterbox=(
-                float(cap.letterbox_pad_x),
-                float(cap.letterbox_pad_y),
-                cap.letterbox_scale,
-            ),
-        )
-    executor.execute_moves(moves)
+    executor = MoveExecutor(
+        geometry,
+        cap.anchor,
+        scale_xy=(
+            cap.owidth / float(cap.internal_width),
+            cap.oheight / float(cap.internal_height),
+        ),
+    )
+    executor.execute(moves)
 
 
 if __name__ == "__main__":

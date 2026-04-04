@@ -7,6 +7,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import time
 
 from capture import INTERNAL_HEIGHT, INTERNAL_WIDTH, capture_game_window
 from executor import MoveExecutor
@@ -54,6 +55,12 @@ def parse_args() -> argparse.Namespace:
         help="Solver to use (required).",
         choices=solver_names
     )
+    p.add_argument(
+        "--repeat",
+        action="store_true",
+        help="Play again automatically after game ends."
+    )
+
     return p.parse_args()
 
 
@@ -77,53 +84,77 @@ def _save_debug_matrix(grid: np.ndarray) -> None:
 
 def main() -> None:
     args = parse_args()
+    game_played = 1
+    min_score = int(input("Enter minimum score: "))
 
-    print("Locating game window and capturing…")
-    cap = capture_game_window(
-        window_title=args.window_title
-    )
-    if args.debug:
-        _save_debug_capture(cap.image_bgr)
+    while True:
+        print(f"Start game {game_played}")
 
-    recognizer = Recognizer(force_calibration=args.calibrate)
-    matrix, _squares = recognizer.get_matrix(cap.image_bgr)
-    if matrix is None:
-        print("Failed to read grid (missing/invalid sqinfo or recognition).")
-        return
+        start_time = time.time()
+        print("Locating game window and capturing…")
+        cap = capture_game_window(
+            window_title=args.window_title
+        )
+        if args.debug:
+            _save_debug_capture(cap.image_bgr)
 
-    grid = np.array(matrix, dtype=np.int16)
-    print("Grid shape:", grid.shape)
-    if args.debug:
-        _save_debug_matrix(grid)
+        recognizer = Recognizer(force_calibration=args.calibrate)
+        matrix, _squares = recognizer.get_matrix(cap.image_bgr)
+        if matrix is None:
+            print("Failed to read grid (missing/invalid sqinfo or recognition).")
+            return
 
-    print("Solving grid...")
-    solver = SOLVERS[args.solver](grid, args.debug)
-    solver.plan()
-    moves = solver.get_solution()
-    print(f"Planned {len(moves)} move(s).")
-    print(f"Score: {solver.score()}")
+        grid = np.array(matrix, dtype=np.int16)
+        print("Grid shape:", grid.shape)
+        if args.debug:
+            _save_debug_matrix(grid)
 
-    if args.dry_run:
-        print("Dry run: skipping executor.")
-        return
+        print("Solving grid...")
+        solver = SOLVERS[args.solver](grid, args.debug)
+        solver.plan()
+        moves = solver.get_solution()
+        print(f"Planned {len(moves)} move(s).")
+        print(f"Score: {solver.score()}")
 
-    if recognizer.sqinfo is None:
-        print("Missing sqinfo after recognition; cannot execute.")
-        return
+        if args.dry_run:
+            print("Dry run: skipping executor.")
+            return
 
-    print("Executing moves...")
-    geometry = GridGeometry.from_sqinfo(recognizer.sqinfo)
-    executor = MoveExecutor(
-        geometry,
-        cap.anchor,
-        scale_xy=(
-            cap.owidth / float(cap.internal_width),
-            cap.oheight / float(cap.internal_height),
-        ),
-    )
-    executor.execute(moves)
+        if recognizer.sqinfo is None:
+            print("Missing sqinfo after recognition; cannot execute.")
+            return
 
-    print("All moves executed!")
+        geometry = GridGeometry.from_sqinfo(recognizer.sqinfo)
+        executor = MoveExecutor(
+            geometry,
+            cap.anchor,
+            scale_xy=(
+                cap.owidth / float(cap.internal_width),
+                cap.oheight / float(cap.internal_height),
+            )
+        )
+        if (solver.score() < min_score):
+            print(f"Score ({solver.score()}) less than threshold ({min_score}). Restarting...")
+            executor.click_restart()
+            continue
+
+        print("Executing moves...")
+        executor.execute(moves)
+
+        print(f"Used {time.time() - start_time}s")
+
+        if (time.time() - start_time < 130):
+            print(f"Waiting until game end...")
+            time.sleep(start_time + 130 - time.time())
+        
+        if not args.repeat:
+            break
+        
+        game_played += 1
+        args.calibrate = True
+        executor.click_play_again()
+        
+    print(f"Script finished. Game played: {game_played}")
 
 
 if __name__ == "__main__":

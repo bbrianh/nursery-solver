@@ -98,3 +98,54 @@ class MoveExecutor:
                 break
 
             self.execute_move(move)
+    
+    def click_play_again(self):
+        if self.terminate: return
+        pos = self.cell_center(11, 5)
+        if self._check_interrupt() or self.terminate: return 
+        pyautogui.click(pos[0], pos[1])
+        self.last_mouse_position = pyautogui.position()
+    
+    def click_restart(self):
+        pos = self.cell_center(-2, 0)
+        if self._check_interrupt() or self.terminate: return 
+        pyautogui.click(pos[0], pos[1])
+        self.last_mouse_position = pyautogui.position()
+        time.sleep(0.5)
+
+        pos = self.cell_center(8, 4)
+        if self._check_interrupt() or self.terminate: return 
+        pyautogui.click(pos[0], pos[1])
+        self.last_mouse_position = pyautogui.position()
+        time.sleep(0.5)
+
+        pos = self.cell_center(9, 4)
+        if self._check_interrupt() or self.terminate: return 
+        pyautogui.click(pos[0], pos[1])
+        self.last_mouse_position = pyautogui.position()
+        time.sleep(1)
+
+        pos = self.cell_center(18, 5)
+        if self._check_interrupt() or self.terminate: return 
+        pyautogui.click(pos[0], pos[1])
+        self.last_mouse_position = pyautogui.position()
+        time.sleep(3)
+
+# testing code
+if __name__ == '__main__':
+    from capture import capture_game_window
+    from models import GridGeometry
+    from recognizer import Recognizer
+
+    cap = capture_game_window()
+    recognizer = Recognizer()
+    geometry = GridGeometry.from_sqinfo(recognizer.sqinfo)
+    executor = MoveExecutor(
+        geometry,
+        cap.anchor,
+        scale_xy=(
+            cap.owidth / float(cap.internal_width),
+            cap.oheight / float(cap.internal_height),
+        )
+    )
+    executor.click_restart()

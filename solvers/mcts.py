@@ -138,6 +138,17 @@ class MCTSSolver(Solver):
                         if s == 10 and non_zero:
                             rr1, rr2 = r1, r2 + 1
                             cc1, cc2 = non_zero[0], non_zero[-1] + 1
+
+                            # trim rectangle
+                            while np.sum(grid[rr1, cc1:cc2]) == 0:
+                                rr1 += 1
+                            while np.sum(grid[rr1:rr2, cc1]) == 0:
+                                cc1 += 1
+                            while np.sum(grid[rr2-1, cc1:cc2]) == 0:
+                                rr2 -= 1
+                            while np.sum(grid[rr1:rr2, cc2-1]) == 0:
+                                cc2 -= 1
+
                             moves_set.add((rr1, rr2, cc1, cc2))
                     c1 += 1
 

@@ -15,7 +15,6 @@ import pyautogui
 INTERNAL_WIDTH = 450
 INTERNAL_HEIGHT = 844
 
-
 @dataclass
 class CaptureConfig:
     """Fixed screen region: ``(left, top, width, height)`` in screen coordinates."""
@@ -101,11 +100,11 @@ def capture_game_window(
         )
 
     # resize the window to the internal width and height
-    scale = owidth / INTERNAL_WIDTH * 1.
-    if int(scale*INTERNAL_HEIGHT) != int(oheight):
-        delta = int(oheight - scale*INTERNAL_HEIGHT)
-        anchor = (anchor[0], anchor[1]+delta)
-        oheight = int(oheight - delta)
+    scale = owidth / internal_width * 1.
+    if int(scale * internal_height) != int(oheight):
+        delta = int(oheight - scale * internal_height)
+        anchor = (anchor[0], anchor[1] + delta//2)
+        oheight = int(oheight - delta//2)
 
     time.sleep(pause_before)
     left, top = anchor

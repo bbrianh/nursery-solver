@@ -38,6 +38,7 @@ class Solver(ABC):
         return np.sum(self.grid[move.r1:move.r2, move.c1:move.c2]) == 10
     
     def apply_move(self, move: Move) -> None:
+        assert self.is_valid_move(move)
         self.grid[move.r1:move.r2, move.c1:move.c2] = 0
         self.solution.append(move)
         if self.debug:

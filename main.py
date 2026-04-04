@@ -101,6 +101,7 @@ def main() -> None:
     solver.plan()
     moves = solver.get_solution()
     print(f"Planned {len(moves)} move(s).")
+    print(f"Score: {solver.score()}")
 
     if args.dry_run:
         print("Dry run: skipping executor.")
@@ -121,6 +122,8 @@ def main() -> None:
         ),
     )
     executor.execute(moves)
+
+    print("All moves executed!")
 
 
 if __name__ == "__main__":
